@@ -1,0 +1,523 @@
+---
+title: "EDA&S in R Assignment"
+author: "411309, Khalid Adam Yusuf"
+date: "2023-10-16"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#Libraries
+```{r}
+library(tidyverse)
+library(car)
+library(ggpubr)
+library(rstatix)
+library(multcompView)
+require(astsa, quietly=TRUE, warn.conflicts=FALSE)
+library(ggplot2)
+library(dplyr)
+require(signal)
+require(zoo)
+tibble::glimpse(Mean_CET)
+library(timetk)
+library(patchwork)
+```
+
+```{r}
+setwd("C:/Users/s411309/OneDrive - Cranfield University/Documents/KAY/Assignment")
+```
+
+# TASK1
+
+1) Load the dataset into the R environment (call it ASP) and perform quality control and initial exploratory data analysis using descriptive statistics. Create histograms to check the distribution for each variable and comment on the patterns you observe. Check if there are any missing values, and take appropriate action. 
+
+```{r}
+ASP <- read.csv(file = "Data_Assign/A_CS.csv", header = T, sep = ",",)
+
+knitr::kable(ASP[c(1:5),], caption = "First lines of the ASP dataset")
+
+```
+
+Performing quality control on ASP data
+
+```{r}
+summary(ASP)
+
+# Checking for missing values
+na_matrix <- is.na(ASP)
+table(na_matrix)
+
+ASP_complete <- ASP[complete.cases(ASP), ]
+
+ASP_missing <- ASP[!complete.cases(ASP), ]
+
+```
+
+Now that I confirm I have a missing value in DPA, to deal with it, I will replace it with the mean value of DPA after assuming normal distribution
+
+```{r}
+# Calculating the mean of DPA without the NA
+meanDPA <- mean(ASP$DPA, na.rm = TRUE)
+
+# Replacing NA ith the mean value
+ASP[is.na(ASP$DPA), "DPA"] <- meanDPA
+```
+
+Histograms to check the distributions of the variables
+
+```{r}
+hist(ASP$Fructose, main = "Histogram of the raw Fructose values", 
+     xlab = "Fructose values", ylab = "Freq", col = "black", breaks = 15, las = 1)
+
+hist(ASP$Glucose, main = "Histogram of the raw Glucose values", 
+     xlab = "Glucose values", ylab = "Freq", col = "red", breaks = 15, las = 1)
+
+hist(ASP$Sucrose, main = "Histogram of the raw Sucrose values", 
+     xlab = "Sucrose values", ylab = "Freq", col = "blue", breaks = 15, las = 1)
+
+hist(ASP$TSS, main = "Histogram of the raw TSS values", 
+     xlab = "TSS values", ylab = "Freq", col = "purple", breaks = 15, las = 1)
+
+hist(ASP$ABA, main = "Histogram of the raw ABA values", 
+     xlab = "ABA values", ylab = "Freq", col = "brown", breaks = 15, las = 1)
+
+hist(ASP$DPA, main = "Histogram of the raw DPA values", 
+     xlab = "DPA values", ylab = "Freq", col = "salmon", breaks = 15, las = 1)
+
+hist(ASP$PA, main = "Histogram of the raw PA values", 
+     xlab = "PA values", ylab = "Freq", col = "green", breaks = 15, las = 1)
+
+hist(ASP$X7OH_ABA, main = "Histogram of the raw X7OH_ABA values", 
+     xlab = "X7OH_ABA values", ylab = "Freq", col = "yellow", breaks = 15, las = 1)
+
+hist(ASP$Moisture.loss, main = "Histogram of the raw moisture loss values", 
+     xlab = "Moisture loss values", ylab = "Freq", col = "orange", breaks = 15, las = 1)
+
+```
+
+2)Create a new column containing the sum of all sugars (call it sum_sugar) and one containing the sum of ABA and its metabolites (call it ABA_metab). Add the new variables in the dataframe and call the new dataframe ASPext. Caution: Do not replace the dataframe ASP, keep both ASP and ASPext).
+
+```{r}
+ASPext <- dplyr::mutate(ASP, sum_sugar= Fructose+Glucose+Sucrose,ABA_metab= ABA+DPA+PA+X7OH_ABA)
+
+```
+
+3) Use boxplots to visualise the following variables: sum_sugar, ABA_metab, TSS, moisture_loss. For each variable, include 4 boxplots in total (in the same graph) to visualise the distribution of values for each time/treatment combinations. Comment on the plots. Are there any suspected outliers? Make a note of suspected outliers.
+
+```{r}
+# converting sample, treatment and time into factors
+ASPext <- dplyr::mutate_at(ASPext, vars(Sample, Treatment, Time), as.factor)
+
+```
+```{r}
+#generating frequency table for treatment and time
+table(ASPext$Treatment, ASPext$Time)
+```
+
+Boxplots
+
+```{r}
+# For sum of sugars
+ggboxplot(ASPext, x = "Time", y = "sum_sugar", color = "Treatment", ylab="Sum of Sugars",
+          palette = c("#4B1616", "#E7B3d4", "#FC40d4"), main= "Distribution of sum sugars",
+          add.params = list(size = 0.9), 
+          bxp.errorbar = TRUE, bxp.errorbar.width = 0.15)
+
+# For ABA and its metabolites
+ggboxplot(ASPext, x = "Time", y = "ABA_metab", color = "Treatment", ylab="Distribution of Sum of ABA_metab",
+          palette = c("#00A000", "#0A0126", "#FC4E07"), main= "Distribution of Sum of ABA and its metabolites",
+          add.params = list(size = 0.9), 
+          bxp.errorbar = TRUE, bxp.errorbar.width = 0.15)
+
+# For Total Soluble Solid (TSS)
+ggboxplot(ASPext, x = "Time", y = "TSS", color = "Treatment", ylab="Total Soluble Solid",
+          palette = c("#ca2311", "#0e8011", "#e8bc0e"), main= "Distribution of Total Soluble Solids",
+          add.params = list(size = 0.9), 
+          bxp.errorbar = TRUE, bxp.errorbar.width = 0.15)
+
+# For Moisture loss
+ggboxplot(ASPext, x = "Time", y = "Moisture.loss", color = "Treatment", ylab="Moisture Loss",
+          palette = c("#227AB5", "#9E22cb", "#8B9a0b"), main= "Distribution of Moisture Loss",
+          add.params = list(size = 0.9), 
+          bxp.errorbar = TRUE, bxp.errorbar.width = 0.15)
+
+```
+
+4) Perform two-way anova to infer the effect of Treatment and Time and their interaction on each of the following variables: sum_sugar, ABA_metab, TSS, moisture_loss. Perform a Tukey test and make a list of the statistically significant effects and/or interactions
+
+```{r}
+# Two-way anova for sum_sugar
+Sum_sugar.anova <- aov(sum_sugar~Treatment*Time, data = ASPext)
+summary(Sum_sugar.anova)
+
+# Two-way anova for ABA_metab
+ABA_metab.anova <- aov(ABA_metab~Treatment*Time, data = ASPext)
+summary(ABA_metab.anova)
+
+# Two-way anova for TSS
+TSS.anova <- aov(TSS~Treatment*Time, data = ASPext)
+summary(TSS.anova)
+
+# Two-way anova for moisture.loss
+Moisture_loss.anova <- aov(Moisture.loss~Treatment*Time, data = ASPext)
+summary(Moisture_loss.anova)
+```
+
+Tukey test
+
+```{r}
+Tukey1 <- TukeyHSD(Sum_sugar.anova)
+
+Tukey2 <- TukeyHSD(ABA_metab.anova)
+
+Tukey3 <- TukeyHSD(TSS.anova)
+
+Tukey4 <- TukeyHSD(Moisture_loss.anova)
+```
+
+5) Create bar plots for the variables: sum_sugar, ABA_metab, TSS, moisture_loss, showing side-by-side the concentrations for AIR and DCA samples at 8 and 28 days respectively. Add standard error bars and make use of symbols to denote significant differences (if any) based on the anova summary and Tukey test results. 
+
+For sum_sugar
+```{r}
+library("ggsignif")
+# Compact letter display of anova and tukey test of sum_sugar
+sum_sugar_cld <- multcompLetters4(Sum_sugar.anova, Tukey1)
+
+# table with factors and 3rd quantile
+Ksum_sugar <- ASPext %>%
+    group_by(Treatment, Time) %>%
+    summarise(sum_sugar.m=mean(sum_sugar), sum_sugar.sd = sd(sum_sugar)/sqrt(length(sum_sugar)))
+
+sum_sugar_cld2 <- data.frame(letters=sum_sugar_cld$`Treatment:Time`$Letters)
+
+Ksum_sugar$sum_sugar_cld <- sum_sugar_cld2$letters
+print(Ksum_sugar)
+
+ggplot(Ksum_sugar, aes(x = Treatment, y = sum_sugar.m)) +
+  geom_bar(stat = "identity", aes(fill = Treatment), show.legend = T) +
+  geom_errorbar(aes(ymin = sum_sugar.m - sum_sugar.sd, ymax = sum_sugar.m + sum_sugar.sd), width = 0.2,colour = "black", orientation = "x") +
+  labs(x = "Treatment", y = "sum_sugar") +
+  geom_text(aes(label = sum_sugar_cld, y = sum_sugar.m + sum_sugar.sd), vjust = 0.1) +
+  facet_wrap (~Time)
+```
+For ABA_metab
+```{r}
+# Compact letter display of anova and tukey test of ABA_metab
+ABA_metab_cld <- multcompLetters4(ABA_metab.anova, Tukey2)
+
+# table with factors and 3rd quantile
+KABA_metab <- ASPext %>%
+    group_by(Treatment, Time) %>%
+    summarise(ABA_metab.m=mean(ABA_metab), ABA_metab.sd = sd(ABA_metab)/sqrt(length(ABA_metab)))
+
+ABA_metab_cld2 <- data.frame(letters=ABA_metab_cld$`Treatment:Time`$Letters)
+
+KABA_metab$ABA_metab_cld <- ABA_metab_cld2$letters
+print(KABA_metab)
+
+ggplot(KABA_metab, aes(x = Treatment, y = ABA_metab.m)) +
+  geom_bar(stat = "identity", aes(fill = Treatment), show.legend = T) +
+  geom_errorbar(aes(ymin = ABA_metab.m - ABA_metab.sd, ymax = ABA_metab.m + ABA_metab.sd), width = 0.2,colour = "green", orientation = "x") +
+  labs(x = "Treatment", y = "ABA_metab") +
+  geom_text(aes(label = ABA_metab_cld, y = ABA_metab.m + ABA_metab.sd), vjust = 0.1) +
+  facet_wrap (~Time)
+```
+For TSS
+```{r}
+# Compact letter display of anova and tukey test of TSS
+TSS_cld <- multcompLetters4(TSS.anova, Tukey3)
+
+# table with factors and 3rd quantile
+KTSS <- ASPext %>%
+    group_by(Treatment, Time) %>%
+    summarise(TSS.m=mean(TSS), TSS.sd = sd(TSS)/sqrt(length(TSS)))
+
+TSS_cld2 <- data.frame(letters=TSS_cld$`Treatment:Time`$Letters)
+
+KTSS$TSS_cld <- TSS_cld2$letters
+print(KTSS)
+
+ggplot(KTSS, aes(x = Treatment, y = TSS.m)) +
+  geom_bar(stat = "identity", aes(fill = Treatment), show.legend = T) +
+  geom_errorbar(aes(ymin = TSS.m - TSS.sd, ymax = TSS.m + TSS.sd), width = 0.2,colour = "blue", orientation = "x") +
+  labs(x = "Treatment", y = "Total Soluble Solid") +
+  geom_text(aes(label = TSS_cld, y = TSS.m + TSS.sd), vjust = 0.1) +
+  facet_wrap (~Time)
+
+```
+For Moisture.loss
+```{r}
+# Compact letter display of anova and tukey test of Moisture_loss
+Moisture.loss_cld <- multcompLetters4(Moisture_loss.anova, Tukey4)
+
+# table with factors and 3rd quantile
+KMoisture.loss <- ASPext %>%
+    group_by(Treatment, Time) %>%
+    summarise(Moisture.loss.m=mean(Moisture.loss), Moisture.loss.sd = sd(Moisture.loss)/sqrt(length(Moisture.loss)))
+
+Moisture.loss_cld2 <- data.frame(letters=Moisture.loss_cld$`Treatment:Time`$Letters)
+
+KMoisture.loss$Moisture.loss_cld <- Moisture.loss_cld2$letters
+print(KMoisture.loss)
+
+ggplot(KMoisture.loss, aes(x = Treatment, y = Moisture.loss.m)) +
+  geom_bar(stat = "identity", aes(fill = Treatment), show.legend = T) +
+  geom_errorbar(aes(ymin = Moisture.loss.m - Moisture.loss.sd, ymax = Moisture.loss.m + Moisture.loss.sd), width = 0.2,colour = "gold", orientation = "x") +
+  labs(x = "Treatment", y = "Moisture loss") +
+  geom_text(aes(label = Moisture.loss_cld, y = Moisture.loss.m + Moisture.loss.sd), vjust = 0.1) +
+  facet_wrap (~Time)
+
+```
+
+6) Perform PCA for the original dataframe (ASP). Visualise the PCA scores plot and biplot for PC1 and PC2 and print the %variance captured by each component in the axis labels. Colour the samples according to the groups they belong to (Treatment and Time) so you have 4 groups in total. Display a legend on the side of the plot with the different groups. What assumptions can you make by looking at the generated plots?
+
+```{r}
+# Installing additional packages
+#install.packages("MASS")
+#install.packages("factoextra")
+
+#Loading libraries
+library(MASS)
+library(factoextra)
+library(ggplot2)
+
+dim(ASP)
+str(ASP)
+summary(ASP)
+
+#Excluding categorical variables
+ASP_sample <- ASP[, -c(1,2,3)]
+```
+Running PCA
+```{r}
+ASP_PCA <- prcomp(ASP_sample, scale = TRUE)
+summary(ASP_PCA)
+```
+
+```{r}
+# Elements of PCA
+names(ASP_PCA)
+
+#std dev components
+ASP_PCA$sdev
+
+#Eigenvectors
+ASP_PCA$rotation
+
+# std dev and mean of variables
+ASP_PCA$center
+ASP_PCA$scale
+
+#Principal components values
+ASP_PCA$x
+
+#Scree plot of variance
+fviz_eig(ASP_PCA, addlabels = T, ylim = c(0, 80))
+
+#Biplot with default seettings
+fviz_pca_biplot(ASP_PCA)
+
+#biplot with labeled variables
+fviz_pca_biplot(ASP_PCA,
+                label="var", col.var = "black", addEllipses = T,
+                repel = T)
+#biplot with colored groups
+fviz_pca_biplot(ASP_PCA,
+                label="var",
+                habillage = ASP$Sample,
+                xlab="PC1", ylab="PC2")
+
+#Biplot with customized colored groups and variables
+fviz_pca_biplot(ASP_PCA,
+                label="var",
+                habillage = ASP$Sample)
+```
+
+7) Create barplots of the loadings for the first two PCs and comment on which variables are more important for each PC.
+
+```{r}
+source("hcluster1.r")
+ASPModel <- prcomp(ASP_sample,retx=T,center=T,scale=F)
+SCORES <- ASPModel$x
+screeplot(ASPModel)
+
+aASPModel <- prcomp(ASP_sample,retx=T,center=T,scale=T)
+aSCORES <- aASPModel$x
+
+# Barplot for PC1 loadings
+barplot(ASP_PCA$rotation[,1],main="PC1 Loadings for Auto-scaled data\n", cex.names = .75, las=2)
+
+cat("\n============ Clustering the first four PCs of the Auto-scaled data =============\n")
+hcluster(aSCORES[,1:4],"euclidean", "ward.D", "PCA: Auto-scaled Data")
+
+# Barplot for PC2 loadings
+barplot(ASP_PCA$rotation[,2],main="PC2 Loadings for Auto-scaled data\n", cex.names = .75, las=2)
+cat("\n============ Clustering the first four PCs of the Auto-scaled data =============\n")
+hcluster(aSCORES[,1:4],"euclidean", "ward.D", "PCA: Auto-scaled Data")
+
+```
+
+8) Visualise the results in heatmaps/dendrograms and comment on the separation of the different treatments/timepoints.
+
+```{r}
+library(pheatmap)
+K <- ASP_PCA$rotation
+
+pheatmap(K)
+pheatmap(K, scale = "column")
+```
+
+9) Perform k-means clustering on a) the raw data and b) on auto-scaled data and look at the differences in the results. Has k-means successfully clustered together samples belonging to the same group?
+
+For raw data
+```{r}
+library(cluster)
+library(ggpubr)
+
+# scale the data
+ASP.m <- scale(ASP_sample, center=T, scale=F)
+fviz_nbclust(ASP.m, kmeans, method = "wss") + geom_vline(xintercept = 5, linetype = 2)
+
+set.seed(123)
+# Computing gap statistic for kmeans
+gap_stat <- clusGap(ASP.m, FUN = kmeans, nstart = 25,
+                    K.max = 10, B = 10)
+print(gap_stat, method = "firstmax")
+fviz_gap_stat(gap_stat)
+
+# Computing k-means with k = 5
+set.seed(41241)
+km.res <- kmeans(ASP.m, centers = 5,iter.max = 10, nstart = 25)
+print(km.res)
+
+#Visualising k-means
+ind.coord <- as.data.frame(get_pca_ind(ASPModel)$coord)
+ind.coord$cluster <- factor(km.res$cluster)
+ind.coord$Species <- gsub("[123456]", "", rownames(ASP_sample))
+
+ggscatter(ind.coord, x = "Dim.1", y = "Dim.2", color = "cluster", palette = "npg", 
+          ellipse = TRUE, ellipse.type = "convex",  shape = "Species", size = 1.5,  
+          legend = "right", ggtheme = theme_bw(), 
+          xlab = "Dim 1",
+          ylab = "Dim 2") +
+  stat_mean(aes(color = cluster), size = 4)
+```
+
+For autoscaled data
+```{r}
+ASP_PCA.m <- scale(aSCORES, center=T, scale=F)
+fviz_nbclust(ASP_PCA.m, kmeans, method = "wss") + geom_vline(xintercept = 5, linetype = 2)
+
+set.seed(123)
+# Computing gap statistic for kmeans
+gap_stat <- clusGap(ASP_PCA.m, FUN = kmeans, nstart = 25,
+                    K.max = 10, B = 10)
+print(gap_stat, method = "firstmax")
+fviz_gap_stat(gap_stat)
+
+# Computing k-means with k = 5
+set.seed(41241)
+km.res <- kmeans(ASP_PCA.m, centers = 5,iter.max = 10, nstart = 25)
+print(km.res)
+
+#Visualising k-means
+ind.coord <- as.data.frame(get_pca_ind(aASPModel)$coord)
+ind.coord$cluster <- factor(km.res$cluster)
+ind.coord$Species <- gsub("[123456]", "", rownames(ASP_sample))
+
+ggscatter(ind.coord, x = "Dim.1", y = "Dim.2", color = "cluster", palette = "npg", 
+          ellipse = TRUE, ellipse.type = "convex",  shape = "Species", size = 1.5,  
+          legend = "right", ggtheme = theme_bw(), 
+          xlab = "Dim 1",
+          ylab = "Dim 2") +
+  stat_mean(aes(color = cluster), size = 4)
+
+```
+
+#TASK 2
+
+a) Import the csv file Mean_Central_Eng_Temp.csv into the R workspace. This dataset contains the Mean Central England Temperature (Degrees Celsius) from 1659 to 2022. Plot the raw data for the column “Annual” which contains the yearly average temperatures and try to identify general trends.
+
+```{r}
+Mean_CET <- read.csv(file = "Data_Assign/Mean_Central_Eng_Temp.csv", header = T, sep = ",")
+
+summary(Mean_CET)
+
+##Ploting raw data
+
+g1<-ggplot(Mean_CET, aes(Year, Annual))
+g1+geom_point()+ geom_line()+
+  scale_y_continuous(limits = c(5, 13))
+
+
+```
+
+b) b) Perform Loess smoothing of the raw annual data to uncover the real trend in the time series. You can make use of the function smooth_vec() in the library timetk. Choose different parameters, so as to 1) perform smoothing equivalent roughly to a 10-year moving average and 2) smoothing to see the overall long-trend across all years. What are your observations? (Tip: create a plot with the raw and smoothed data ovelayed).
+
+```{r}
+#overlay
+g_MA <- rollmean(Mean_CET,k = 11)
+g_MA<-as.data.frame(gma)
+g_Raw <- Mean_CET
+g_Raw <-as.data.frame(gm)
+legend_content <- c("g_Raw", "g_MA")
+legend_colors <- c("black", "red")
+
+g+geom_line(data=g_Raw, aes(color = legend_content[1]), linetype = "solid", size = 1)+
+  geom_line(data=g_MA, aes(color = legend_content[2]), linetype = "dotdash", size = 1)+
+  theme_set(theme_bw(base_size = 15))+
+  theme(panel.grid = element_blank())+
+  ggtitle("Yearly average temperature of Cen_Eng.")+
+  labs(x="Year", y="Annual")+
+  scale_color_manual(name = "ST",
+                     breaks = legend_content,
+                     values = legend_colors )+
+  scale_x_continuous(breaks = seq(1600, 2100, 100))+
+  scale_y_continuous(limits = c(5, 13))
+
+
+```
+
+c) Calculate the 1961-1990 mean annual temperature. Then create a new column in the dataset and subtract the 1961-1990 mean from the annual mean temperature for all the years. Call the column “Diff”. This is done in order to identify any anomalies relative to the 1961-1990 mean. Plot the data from the new column against the year and colour the negative values blue and the positive red. Then apply loess smoothing again roughly equivalent to a 10-year moving average. Plot the raw and smoothed data on the same plot. Describe the results and attempt to draw conclusions. Make use of literature references, if possible, to support your conclusions.
+
+```{r}
+# Calculating the 1961-1990 mean of annual temp
+mean(Mean_CET[303:332, 14])
+
+# Adding the new column to the dataset
+Mean_CET2 <- dplyr::mutate(Mean_CET, Diff= Annual - mean(Mean_CET[303:332, 14]))
+
+# Ploting the new data
+D1<-ggplot(Mean_CET2, aes(Year, Diff), main = "Yearly mean difference of Mean_CET")+
+  geom_point()+ geom_line()+
+  scale_y_continuous(limits = c(-4, 3))
+
+```
+
+#TASK 3
+
+a) Import the data set into the R environment and store the values in a vector. Check the length of the vector and store this value in a variable. Plot the data to see how division times change over successive divisions. (The x axis should be the division time for each division, the y axis is meaningless and should be kept constant). What do you observe?
+
+```{r}
+div.time <- scan("Data_Assign/event_times.txt")
+
+plot(div.time, axes = T, type = "l")
+```
+
+b) Create a new vector with the waiting times between cell divisions.
+
+```{r}
+diff.time <- diff(div.time)
+```
+
+c) Create a histogram to visualise the distribution of waiting times. Do they look like they follow an exponential distribution?
+
+```{r}
+#visualizing the distribution of waiting times
+hist(diff.time)
+```
+
